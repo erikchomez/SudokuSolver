@@ -17,6 +17,25 @@ def show_image(image, image_str):
     cv2.waitKey(0)
 
 
+def process_image(image):
+    """
+    Applies pre-processing to an image. This includes converting to grayscale, applying a GaussianBlur, Adaptive
+    Threshold, and inverting the thresh using bitwise_not
+    :param image: image to be processed
+    :return: processed image
+    """
+    # convert image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # apply Gaussian blur to grayscale image
+    blurred = cv2.GaussianBlur(gray, (9, 9), 0)
+    # apply adaptive threshold
+    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    # invert threshold
+    thresh = cv2.bitwise_not(thresh)
+
+    return thresh
+
+
 def find_contours(threshed_image):
     """
     Finds the contours in an image that has been threshed
@@ -106,27 +125,85 @@ def perspective_transform(orig_image, corners):
     return cv2.warpPerspective(orig_image, m, (int(side), int(side)))
 
 
+def grid(image):
+    """
+    Obtains the grid from the image.
+    :param image: warped image to create grid from
+    :return: a list of squares and their coordinates (top left, bottom right) which we can construct a square
+    using the diagonal
+    """
+    grid_squares = []
+    # image.shape returns a tuple of (num rows, num cols, channels)
+    # since we know the warped image is a square, we can access the first element of the tuple
+    side = image.shape[:1][0]
+    # we are going to make our own grid out of the standard 9 x 9 Sudoku grid
+    side = side / 9
+
+    for j in range(9):
+        for i in range(9):
+            # computes the top left corner of a box
+            p1 = (i * side, j * side)
+            # computes the bottom right corner
+            p2 = ((i + 1) * side, (j + 1) * side)
+            grid_squares.append((p1, p2))
+
+    return grid_squares
+
+
+def extract_digits(image, squares):
+    """
+    Extracts the digit from each square
+    :param image: the image
+    :param squares: list of square coordinates (top left, bottom right) in the grid
+    :return:
+    """
+    for i in squares:
+        top_left = (int(i[0][0]), int(i[0][1]))
+        bottom_right = (int(i[1][0]), int(i[1][1]))
+
+        roi = image.copy()[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+        roi_processed = process_image(roi)
+
+        if DEBUG: show_image(roi_processed, 'roi processed')
+
+
+def calc_rect_points(two_corners):
+    """
+    Helper function that computes coordinates of the four corners of a rectangle given two diagonal coordinates
+    :param two_corners: tuple containing two coordinates of diagonal corners
+    :return: list of coordinates of the four corners of a rectangle
+    """
+    x1, y1 = two_corners[0][0], two_corners[0][1]
+
+    x2, y2 = two_corners[1][0], two_corners[1][1]
+
+    xc, yc = (x1 + x2) / 2, (y1 + y2) / 2
+    xd, yd = (x1 - x2) / 2, (y1 - y2) / 2
+
+    x3, y3 = xc - yd, yc + xd
+    x4, y4 = xc + yd, yc - xd
+
+    return [(x1, y1), (x3, y3), (x2, y2), (x4, y4)]
+
+
 def main():
     image = cv2.imread('sudoku.jpeg')
 
-    # convert image to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # apply Gaussian blur to grayscale image
-    blurred = cv2.GaussianBlur(gray, (9, 9), 0)
-    # apply adaptive threshold
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    # invert threshold
-    thresh = cv2.bitwise_not(thresh)
+    processed_image = process_image(image)
 
-    if DEBUG: show_image(thresh, 'thresh')
+    # if DEBUG: show_image(processed_image, 'thresh')
 
-    contours = find_contours(thresh)
+    contours = find_contours(processed_image)
 
     corners = find_corners(contours)
 
     warped = perspective_transform(image, corners)
 
-    if DEBUG: show_image(warped, 'warped')
+    # if DEBUG: show_image(warped, 'warped')
+
+    squares = grid(warped)
+
+    digits = extract_digits(warped, squares)
 
 
 if __name__ == '__main__':
