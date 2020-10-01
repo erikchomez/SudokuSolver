@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
+import cnn
+
 from operator import itemgetter
 
-DEBUG = True
+DEBUG = False
 RED = [0, 0, 255]
 
 
@@ -17,11 +19,12 @@ def show_image(image, image_str):
     cv2.waitKey(0)
 
 
-def process_image(image):
+def process_image(image, apply=True):
     """
     Applies pre-processing to an image. This includes converting to grayscale, applying a GaussianBlur, Adaptive
     Threshold, and inverting the thresh using bitwise_not
     :param image: image to be processed
+    :param apply: bool to determine whether or not to invert the threshold, placeholder for when we train the model
     :return: processed image
     """
     # convert image to grayscale
@@ -30,8 +33,10 @@ def process_image(image):
     blurred = cv2.GaussianBlur(gray, (9, 9), 0)
     # apply adaptive threshold
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    # invert threshold
-    thresh = cv2.bitwise_not(thresh)
+
+    if apply:
+        # invert threshold
+        thresh = cv2.bitwise_not(thresh)
 
     return thresh
 
@@ -162,7 +167,7 @@ def extract_digits(image, squares):
         bottom_right = (int(i[1][0]), int(i[1][1]))
 
         roi = image.copy()[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
-        roi_processed = process_image(roi)
+        roi_processed = process_image(roi, False)
 
         if DEBUG: show_image(roi_processed, 'roi processed')
 
@@ -204,6 +209,8 @@ def main():
     squares = grid(warped)
 
     digits = extract_digits(warped, squares)
+
+    model = cnn.load_model()
 
 
 if __name__ == '__main__':
